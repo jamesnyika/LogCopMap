@@ -1,0 +1,972 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<record_update table="sp_widget">
+    <sp_widget action="INSERT_OR_UPDATE">
+        <category>custom</category>
+        <client_script><![CDATA[//Logcop client scripts
+
+function ($scope, $rootScope, $location, spUtil) {
+  /* "use strict"; -- linter issues */
+	var c = this;
+	//set classificationlevel
+	setClassification($scope,"unclassified");
+  
+	//create the map
+	initMap(c);
+	//turn on the refresh
+	//setRefreshRate(1000);
+}
+
+function mapColor(ratio){
+  var amount = Math.floor(255.0 * ratio);
+  return 'rgb(${255 - amount}, ${amount}, 0)';
+}
+
+//map refresh rate
+function setRefreshRate(dur)
+{setInterval(initMap(this), dur || 5000);}
+
+//function for setting classification level
+function setClassification($scope, level)
+{
+   $scope.classification = {
+		level: level,
+		name: 'map'};
+}
+
+function initMap(c) {
+	var endDate = new Date();
+endDate.setUTCMinutes(0, 0, 0);
+  //place the map, zoom and starting point
+ var mymap = L.map('omap',{center: [38.870989, -77.055961],zoom: 2,worldCopyJump: true});  //allows markers to be duplicated across worlds
+//var mymap = L.Wrld.map('omap','9a41aa98d0842406635c9fef069d4c90',{center: [38.870989, -77.055961],zoom: 16,worldCopyJump: true});  //allows markers to be duplicated across worlds
+	
+	
+  //set this
+  var mapdata = c.data.logitems;
+	var fcrdata = c.data.fcr;
+	var samdata = c.data.sam;
+	
+	//console.log(fcrdata);
+
+  //use layergroup to add multiple markers together in a layer (see below for functions)
+  var aircraftLayer = getAircraftLayer(mapdata);
+	var dlaLayer = getDLALayer(mapdata);
+	var fobLayer = getFOBLayer(mapdata);
+	var cobLayer = getCOBLayer(mapdata);
+	var newsLayer = getNewsLayer(mapdata);
+	var alertLayer = getAlertLayer(mapdata);
+	var usmclocationLayer = getUSMCLocationLayer(mapdata);
+	var mpsshipLayer = getMPSShipLayer(mapdata);
+	var clfshipLayer = getCLFShipLayer(mapdata);
+	var argmeuLayer = getARGMEULayer(mapdata);
+	var nightdayLayer = L.terminator();
+	var earthquakeLayer = getEarthquakes();
+	var cloudLayer = getCloudLayer();
+	var precipitationLayer = getPrecipitationLayer();
+	var rainLayer = getRainLayer();
+	var snowLayer = getSnowLayer();
+	var pressureLayer = getPressureLayer();
+	var tempLayer = getTempLayer();
+	var windLayer = getWindLayer();
+	var fcrLayer = getFCRLayer(fcrdata,mymap);
+	var samLayer = getSAMLayer(samdata,mymap);
+
+
+  var mbAttr = 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, ' +
+    '<a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+    'Imagery © <a href="http://mapbox.com">Mapbox</a>',
+    mbUrl = 'https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw';
+
+  //set up map types
+  var grayscale = L.tileLayer(mbUrl, {
+      id: 'mapbox.light',
+      attribution: mbAttr
+    }),
+    streets = L.tileLayer(mbUrl, {
+      id: 'mapbox.streets',
+      attribution: mbAttr
+    });
+
+  //collected as a map for the control
+  var baseMaps = {
+    "Tactical Grey": grayscale,
+    "Administrative": streets
+  };
+
+  //define the overlays - just add comma and add another similar to that there
+  var overlayMaps = {
+    "Night/Day": nightdayLayer,
+		"Earthquakes":earthquakeLayer,
+		"Channel Routes":fcrLayer,
+		"Today's SAAMs":samLayer,
+		"FOBs":fobLayer,
+		"COBs":cobLayer,
+		"Current News": newsLayer,
+		"Terror Alerts": alertLayer,
+		"Clouds": cloudLayer,
+		"Precipitation": precipitationLayer,
+		"Rain": rainLayer,
+		"Snow": snowLayer,
+		"Pressure": pressureLayer,
+		"Temperature": tempLayer,
+		"Wind": windLayer,
+		"Aircraft": aircraftLayer,
+		"DLA Locations": dlaLayer,
+		"USMC Major Locations": usmclocationLayer,
+		"MPS Ships": mpsshipLayer,
+		"CLF Ships": clfshipLayer,
+	  "ARG/MEU": argmeuLayer
+	};
+	
+	//--------------------GROUPING CONTROLS------------
+	
+	var groupedBaseMaps = [
+					 {
+						groupName : "Tactical Maps",
+						layers    : {
+							"Tactical Grey": grayscale,
+              "Administrative": streets
+						}
+					}				
+	];	
+	var groupedOverlayMaps = [
+					 {
+						groupName : "Global Conditions",
+						expanded  : true,
+						layers    : { 
+							"Night/Day": nightdayLayer,
+							"Clouds": cloudLayer,
+		          "Precipitation": precipitationLayer,
+		          "Rain": rainLayer,
+		          "Snow": snowLayer,
+		          "Pressure": pressureLayer,
+		          "Temperature": tempLayer,
+		          "Wind": windLayer
+						}	
+					 }, {
+						groupName : "Volcanic",
+						expanded  : false,
+						layers    : { 
+							"Earthquakes":earthquakeLayer	
+						}	
+					 }, {
+						groupName : "Routes",
+						expanded  : false,
+						layers    : { 
+							"Freq Channel":fcrLayer,
+		          "SAAMs": samLayer
+						}	
+					 }, {
+						groupName : "Installations",
+						layers    : { 
+							"DLA Locations": dlaLayer,
+		          "USMC Major Locations": usmclocationLayer,
+							"FOBs":fobLayer,
+		          "COBs":cobLayer
+						}	
+					 },
+		       {
+						groupName : "Logistical Assets",
+						layers    : { 
+							"Aircraft": aircraftLayer,
+		          "MPS Ships": mpsshipLayer,
+		          "CLF Ships": clfshipLayer,
+	            "ARG/MEU": argmeuLayer
+						}	
+					 },
+		{
+						groupName : "News/Intel",
+						layers    : { 
+							"Current News": newsLayer,
+		          "Terror Alerts": alertLayer
+						}	
+					 }		
+	];
+	
+	var groupedoptions = {
+		  container_width : "300px",
+		  container_maxHeight : "350px", 
+		  group_maxHeight     : "80px",
+		  exclusive    : false
+	};
+	
+	
+	//-------------------END GROUPING CONTROLS---------------
+	
+	L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}', {
+    attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://mapbox.com">Mapbox</a>',
+    layers: [grayscale, streets, nightdayLayer,earthquakeLayer,fcrLayer,newsLayer,alertLayer,samLayer,fobLayer,cobLayer,cloudLayer,precipitationLayer,rainLayer,snowLayer,pressureLayer,tempLayer,windLayer,aircraftLayer,dlaLayer,usmclocationLayer,mpsshipLayer,clfshipLayer,argmeuLayer],
+		maxZoom: 18,
+    id: 'mapbox.light',
+    accessToken: 'pk.eyJ1Ijoiam55aWthIiwiYSI6ImNqN20yc3B4ejJ1ankzM28yMnY5MWgwOHkifQ.M-WLP3XXKzVJHgUngUqtww'
+}).addTo(mymap);
+
+
+  //Uncomment this line and comment out the line below if you do not want a grouped layer control.
+  //L.control.layers(baseMaps, overlayMaps).addTo(mymap);
+	
+	var groupedcontrol = L.Control.styledLayerControl(groupedBaseMaps, groupedOverlayMaps, groupedoptions);
+	mymap.addControl(groupedcontrol);
+	
+  //adds a scale
+  L.control.scale().addTo(mymap);
+
+}
+
+//marker creator
+function createMarkers(dataset, markertype,iconname, iconclass)
+{
+   var markers = [];
+	dataset.forEach( function (arrayItem)
+  {
+		//only create markers for this type of marker type
+		if(arrayItem.properties.type == markertype)
+			{
+				var icname = '';
+				if(iconname == null)
+					{icname = arrayItem.properties.name;}
+				else
+					{icname = iconname;}
+				
+				var popuphtml = '<div class="blog-card spring-fever"><div class="title-content"><h3>'+arrayItem.properties.name+'</h3><div class="intro">'+arrayItem.properties.where+'</div><hr/></div><!-- /.title-content --><div class="card-info">'+arrayItem.properties.desc+'</div><div class="utility-info"><ul class="utility-list"><li class="date">'+arrayItem.geometry.coordinates+'</li><li class="date">'+arrayItem.properties.type+'</li></ul></div><!-- /.utility-info --><!-- overlays --><div class="gradient-overlay"></div><div class="color-overlay"></div></div>';
+		    var m = L.marker(arrayItem.geometry.coordinates,{radius: 500}).bindPopup(popuphtml);
+		    var ic = L.icon({iconUrl: icname + '.png',iconSize: [100,40], className: iconclass});
+		    //change icon
+		    m.setIcon(ic);
+		    //add to the list
+		    markers.push(m);
+			}
+		
+  });
+  // markers
+	return markers;
+}
+
+function getEarthquakes()
+{
+	 var FEED = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
+      var NOW = new Date();
+	  var xhr = new XMLHttpRequest();
+      xhr.onload = function () {
+        var results = JSON.parse(xhr.responseText);
+        earthquakes.addData(results);
+      };
+      xhr.open('GET', FEED, true);
+      xhr.send();
+	
+	  var earthquakes = L.geoJson([], {
+        onEachFeature: function (feature, layer) {
+          var props = feature.properties;
+          layer.bindPopup('<a href="' + props.url + '">' + props.title + '</a>');
+        },
+        pointToLayer: function (feature, latlng) {
+          var color,
+              mag,
+              radius;
+          mag = feature.properties.mag;
+          if (mag === null) {
+            color = '#fff';
+            radius = 2;
+          } else {
+            color = '#00f';
+            radius = 2 * Math.max(mag, 1);
+          }
+          if (feature.properties.type === 'quarry blast') {
+            color = '#f00';
+          }
+          return L.circleMarker(latlng, {
+            color: color,
+            radius: radius
+          });
+        }
+      })
+		
+		return earthquakes;
+}
+
+function getFCRLayer(mapdata,mymap)
+{
+	 var fcrlayer = [];
+	 var fromhtml;
+	 var tohtml;
+	 
+	 mapdata.forEach( function (mapitem)
+	 {
+		 
+			 fcrlayer.push (L.Polyline.Arc(mapitem.from, mapitem.to, {
+    color: 'orange',
+    vertices: 300
+}).bindPopup('<div class="ticket">	<div class="ticket-top">		<!-- head -->		<div class="ticket-header">			<div class="head-logo">				'+mapitem.chpath+'			</div>			<div class="head-flight">				'+mapitem.missiontype+'			</div>		</div>		<!-- /head -->		<!-- body -->		<div class="ticket-body">			<!-- locations -->			<div class="locations">				<div class="loc-depart">					'+mapitem.fromname+'					<h1>'+mapitem.fromcode+'</h1>					'+mapitem.fromtime+'				</div>				<div class="loc-direction">					<div class="arrow"></div>				</div>				<div class="loc-arrive">					'+mapitem.toname+'					<h1>'+mapitem.tocode+'</h1>					'+mapitem.totime+'				</div>			</div>			<!-- /locations -->			<div class="body-info">				<!-- name/seat -->				<div class="info">					<div class="info-name">						Type						<h2>'+mapitem.missiontype+'</h2>					</div>					<div class="info-seat">						Duration						<h2>'+mapitem.duration+'</h2>					</div>				</div>				<!-- /name/seat -->				<!-- flight -->				<div class="flight">					<div class="flight-info">						Mission #						<h2>'+mapitem.flightnum+'</h2>					</div>					<div class="flight-depart-date">						Frequency						<h2>'+mapitem.frequency+'</h2>					</div>					<div class="flight-depart-time">						Distance(miles)						<h2>'+ Math.round(0.000621371192 * mymap.distance(L.latLng(mapitem.from),L.latLng(mapitem.to)))+'</h2>					</div>				</div>				<!-- /flight -->			</div>		</div>	</div>	<div class="ticket-bottom">		<div class="bottom-info">			<!-- depart -->			<div class="depart">				<div class="depart-terminal">					Departs					<h2>Terminal 2D</h2>				</div>				<div class="depart-gate">					Purpose					<h2>Medical/Food</h2>				</div>				<div class="depart-boarding">					More Info					<h2><a href="#" target="_blank">View Manifest</a></h2>				</div>			</div>			<!-- /depart -->					</div>	</div></div>'));
+		 //add marker for each point
+		 fromhtml = '<div class="card">  <div class="card-block"> Airport: '+mapitem.fromname+'</div></div>';
+		 tohtml = '<div class="card">  <div class="card-block"> Airport: '+mapitem.toname+'</div></div>';
+		 fcrlayer.push(L.marker(mapitem.from,{radius: 500}).bindPopup(fromhtml));
+		 fcrlayer.push(L.marker(mapitem.to,{radius: 500}).bindPopup(tohtml));
+		
+	 });
+	 return L.layerGroup(fcrlayer);
+}
+
+
+function getSAMLayer(mapdata,mymap)
+{
+	 var samlayer = [];
+	 mapdata.forEach( function (mapitem)
+	 {
+		 
+			 samlayer.push (L.Polyline.Arc(mapitem.from, mapitem.to, {
+    color: 'purple',
+    vertices: 300
+}).bindPopup('<div class="ticket">	<div class="ticket-top">		<!-- head -->		<div class="ticket-header">			<div class="head-logo">				'+mapitem.chpath+'			</div>			<div class="head-flight">				'+mapitem.missiontype+'			</div>		</div>		<!-- /head -->		<!-- body -->		<div class="ticket-body">			<!-- locations -->			<div class="locations">				<div class="loc-depart">					'+mapitem.fromname+'					<h1>'+mapitem.fromcode+'</h1>					'+mapitem.fromtime+'				</div>				<div class="loc-direction">					<div class="arrow"></div>				</div>				<div class="loc-arrive">					'+mapitem.toname+'					<h1>'+mapitem.tocode+'</h1>					'+mapitem.totime+'				</div>			</div>			<!-- /locations -->			<div class="body-info">				<!-- name/seat -->				<div class="info">					<div class="info-name">						Type						<h2>'+mapitem.missiontype+'</h2>					</div>					<div class="info-seat">						Duration						<h2>'+mapitem.duration+'</h2>					</div>				</div>				<!-- /name/seat -->				<!-- flight -->				<div class="flight">					<div class="flight-info">						Mission #						<h2>'+mapitem.flightnum+'</h2>					</div>					<div class="flight-depart-date">						Frequency						<h2>'+mapitem.frequency+'</h2>					</div>					<div class="flight-depart-time">						Distance(miles)						<h2>'+ Math.round(0.000621371192 * mymap.distance(L.latLng(mapitem.from),L.latLng(mapitem.to)))+'</h2>					</div>				</div>				<!-- /flight -->			</div>		</div>	</div>	<div class="ticket-bottom">		<div class="bottom-info">			<!-- depart -->			<div class="depart">				<div class="depart-terminal">					Departs					<h2>Terminal 2D</h2>				</div>				<div class="depart-gate">					Purpose					<h2>Medical/Food</h2>				</div>				<div class="depart-boarding">					More Info					<h2><a href="#" target="_blank">View Manifest</a></h2>				</div>			</div>			<!-- /depart -->					</div>	</div></div>'));
+		 //add marker for each point
+		 samlayer.push(L.marker(mapitem.from,{radius: 500}));
+		 samlayer.push(L.marker(mapitem.to,{radius: 500}));
+		
+	 });
+	 return L.layerGroup(samlayer);
+}
+
+function getFOBLayer(dataset)
+{
+	   //return the layer
+     return L.layerGroup(createMarkers(dataset, 'FOB', 'FOB','fobicon'));
+}
+function getCOBLayer(dataset)
+{
+	   //return the layer
+     return L.layerGroup(createMarkers(dataset, 'COB', 'COB','cobicon'));
+}
+
+function getCloudLayer()
+{
+	 var d = L.OWM.clouds({showLegend: true, legendPosition: "bottomleft", opacity: 0.5, appId: '6fb49f43641dba1a83d95242d05ff5ec'});
+	 return d;
+}
+
+function getPrecipitationLayer()
+{
+	 var d = L.OWM.precipitation({showLegend: true, legendImagePath: "Legend-Rainfall.png", legendPosition: "bottomleft", opacity: 0.5, appId: '6fb49f43641dba1a83d95242d05ff5ec'});
+	 return d;
+}
+
+function getRainLayer()
+{
+	 var d = L.OWM.rain({showLegend: true, legendImagePath: "Legend-Rainfall.png",legendPosition: "bottomleft", opacity: 0.5, appId: '6fb49f43641dba1a83d95242d05ff5ec'});
+	 return d;
+}
+
+function getSnowLayer()
+{
+	 var d = L.OWM.snow({showLegend: true, legendImagePath: "Legend-Snow.png", legendPosition: "bottomleft", opacity: 0.5, appId: '6fb49f43641dba1a83d95242d05ff5ec'});
+	 return d;
+}
+
+function getPressureLayer()
+{
+	 var d = L.OWM.pressure({showLegend: true, legendImagePath: "Legend-Pressure.png", legendPosition: "bottomleft", opacity: 0.5, appId: '6fb49f43641dba1a83d95242d05ff5ec'});
+	 return d;
+}
+function getTempLayer()
+{
+	 var d = L.OWM.temperature({showLegend: true, legendImagePath: "Legend-Temperature.png", legendPosition: "bottomleft", opacity: 0.5, appId: '6fb49f43641dba1a83d95242d05ff5ec'});
+	 return d;
+}
+
+function getWindLayer()
+{
+	 var d = L.OWM.wind({showLegend: true,  legendImagePath: "Legend-Wind.png", legendPosition: "bottomleft", opacity: 0.5, appId: '6fb49f43641dba1a83d95242d05ff5ec'});
+	 return d;
+}
+
+
+function getNewsLayer(dataset)
+{
+	   //return the layer
+     return L.layerGroup(createMarkers(dataset, 'News','News','newsicon'));
+}
+
+function getAlertLayer(dataset)
+{
+	   //return the layer
+     return L.layerGroup(createMarkers(dataset, 'Terror Alert','TerrorAlert','alerticon'));
+}
+//individual layer creation functions begin here
+function getAircraftLayer(dataset)
+{
+	   //return the layer
+     return L.layerGroup(createMarkers(dataset, 'Airplane',null,''));
+}
+
+function getDLALayer(dataset)
+{
+	   //return the layer
+     return L.layerGroup(createMarkers(dataset, 'DLA Location','DLALogo','dlaicon'));
+}
+
+function getUSMCLocationLayer(dataset)
+{
+	   //return the layer
+     return L.layerGroup(createMarkers(dataset, 'USMC Major Location','USMCIcon','usmcicon'));
+}
+
+function getMPSShipLayer(dataset)
+{
+	   //return the layer
+     return L.layerGroup(createMarkers(dataset, 'MPS Ship', 'CLF',''));
+}
+
+function getCLFShipLayer(dataset)
+{
+	   //return the layer
+     return L.layerGroup(createMarkers(dataset, 'CLF Ship','CLF',''));
+}
+
+function getARGMEULayer(dataset)
+{
+	   //return the layer
+     return L.layerGroup(createMarkers(dataset, 'ARG/MEU','ARG-MEU',''));
+}]]></client_script>
+        <controller_as>c</controller_as>
+        <css>#omap { width: 100%;
+  height: 90vh;
+  }
+
+.basecontainer {
+  width:100%;
+  padding:none;
+  margin:none;
+}
+
+.dlaicon
+{
+  width: 60px !important;
+  height: 60px !important;
+}
+
+.usmcicon
+{
+  width: 60px !important;
+  height: 60px !important;
+}
+
+.newsicon
+{width: 60px !important;}
+
+.alerticon
+{width: 60px !important;}
+
+
+//information card
+//-----------BEGIN--------------
+@import url(https://fonts.googleapis.com/css?family=Roboto:400,500,700);
+@import url(https://fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic,700italic);
+
+// variables
+$card-width:  500px;
+$card-height: 350px;
+$h-color:     #fff;
+$yellow:      #E0E4CC;
+$txt-color:   #E1F5C4;
+
+* {
+  box-sizing: border-box;
+}
+
+body{
+  background: #323c41;
+}
+
+.blog-card{
+  width: $card-width;
+  height: $card-height;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: -250px 0 0 -175px;
+  overflow: hidden;
+  border-radius: 10px;
+  box-shadow: 3px 3px 20px rgba(0, 0, 0, .5);
+  text-align: center;
+  
+ 
+  
+  .color-overlay{
+    /* Rectangle 11: */
+    background: rgba(84,104,110,0.4);
+    width: $card-width;
+    height: $card-height;
+    position: absolute;
+    z-index: 10;
+    top: 0;
+    left: 0;
+    transition: background .3s cubic-bezier(.33,.66,.66,1);
+  }
+  .gradient-overlay{
+    /* bg-gradient: */
+    background-image: -webkit-linear-gradient(rgba(0,0,0,0.00) 0%, rgba(0,0,0,.6) 21%);
+    background-image: -moz-linear-gradient(rgba(0,0,0,0.00) 0%, rgba(0,0,0,.6) 21%);
+    background-image: -o-linear-gradient(rgba(0,0,0,0.00) 0%, rgba(0,0,0,.6) 21%);
+    background-image: linear-gradient(rgba(0,0,0,0.00) 0%, rgba(0,0,0,.6) 21%);
+    width: $card-width;
+    height: $card-height;
+    position: absolute;
+    top: 350px;
+    left: 0;
+    z-index: 15;
+  }
+  
+  &amp;:hover{
+    
+    .card-info{
+      opacity: 1;
+      bottom: 120px;
+    }
+    .color-overlay{
+      background: rgba(84,104,110,0.8);
+    }
+  }
+}
+
+.title-content{
+  text-align: center;
+  margin: 10px 0 0 0;
+  position: absolute;
+  z-index: 20;
+  width: 100%;
+  top: 0;
+  left: 0;
+}
+h3{
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  color: $h-color;
+  font-family: 'Roboto', sans-serif;
+  margin-bottom: 0;
+}
+hr{
+  width: 100%;
+  height: 3px;
+  margin: 10px auto;
+  border: 0;
+  background: $yellow;
+}
+.intro{
+  width: 170px;
+  margin: 0 auto;
+  color: $txt-color;
+  font-family: 'Roboto', sans-serif;
+  font-size: 13px;
+  font-style: italic;
+  line-height: 10px;
+}
+.card-info{
+  width: 100%;
+  position: absolute;
+  bottom: 100px;
+  left: 0;
+  margin: 0px auto;
+  padding: 0 30px;
+  color: $txt-color;
+  font-family: 'Roboto', sans-serif;
+  font-style: 13px;
+  line-height: 24px;
+  z-index: 20;
+  opacity: 0;
+  transition: bottom .3s, opacity .3s cubic-bezier(.33,.66,.66,1);
+}
+
+.utility-info{
+  position: absolute;
+  bottom: 0px;
+  left: 0;
+  z-index: 20;
+}
+.utility-list{
+  list-style-type: none;
+  margin: 0 0 30px 20px;
+  padding: 0;
+  width: 100%;
+  
+  li{
+    margin: 0 15px 0 0;
+    padding: 0 0 0 22px;
+    display: inline-block;
+    color: $txt-color;
+    font-family: 'Roboto', sans-serif;
+    
+    &amp;.comments{
+      background: url(https://s3-us-west-2.amazonaws.com/s.cdpn.io/1765/icon-chat.svg) no-repeat 0 .1em;
+    }
+    &amp;.date{
+      background: url(https://s3-us-west-2.amazonaws.com/s.cdpn.io/1765/icon-calendar.svg) no-repeat 0 .1em;
+    }
+  }
+}
+//------------END---------------
+
+
+//-----------FLIGHT CARD------------
+$red: #d92f49;
+$red-d: #a62035;
+$grey: #666;
+$grey-l: lighten($grey, 30%);
+
+h1 {
+	margin: 5px 0;
+	font-size: 20px;
+	color: $grey;
+}
+h2 {
+	margin: 3px 0 0;
+	font-size: 13px;
+	font-weight: normal;
+	color: $grey;
+}
+
+// container
+// ******************************
+.ticket {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 340px;
+	transform: translate(-50%, -50%);
+	color: $grey-l;
+	//background-color: rgba(white, 2);
+}
+
+// top
+// ******************************
+.ticket-header {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 20px 35px;
+	border-radius: 10px 10px 0 0;
+	color: white;
+	background-color: $red;
+}
+.head-logo {
+	font-size: 20px;
+	font-weight: 700;
+}
+.head-flight {
+	font-size: 11px;
+	text-align: right;
+	text-transform: uppercase;
+}
+
+// body
+// ******************************
+.ticket-body {
+	position: relative;
+	border-bottom: 1px dashed lighten($grey-l, 15%);
+	background-color: white;
+	// notches
+	// these are crusty and i hate them
+	&amp;:before,
+	&amp;:after {
+		content: '';
+		position: absolute;
+		top: 100%;
+		width: 16px;
+		height: 16px;
+		border-radius: 8px;
+		background-color: $red-d; // boo!
+	}
+	&amp;:before {
+		right: 100%;
+		transform: translate(8px, -8px);
+	}
+	&amp;:after {
+		left: 100%;
+		transform: translate(-8px, -8px);
+	}
+}
+
+.locations,
+.info,
+.flight {
+	display: flex;
+	align-items: center;
+}
+.body-info {
+	padding: 20px 35px;
+}
+.locations {
+	padding: 20px 35px;
+	border-bottom: 1px solid lighten($grey-l, 15%);
+}
+
+.loc-depart,
+.loc-direction,
+.loc-arrive {
+	flex-grow: 1;
+	flex-shrink: 0;
+	text-transform: uppercase;
+	text-align: center;
+	//background-color: pink;
+	h1 {
+		//font-weight: 300;
+		//color: $grey;
+	}
+}
+
+.arrow	{
+	position: relative;
+	display: inline-block;
+	width: 20px;
+	height: 2px;
+	background-color: $red;
+	&amp;:before,
+	&amp;:after {
+		content: '';
+		position: absolute;
+		width: 15px;
+		height: 2px;
+		background-color: $red;
+	}
+	&amp;:before {
+		transform: rotate(45deg);
+		transform-origin: 12px -5px;
+	}
+	&amp;:after {
+		transform: rotate(-45deg);
+		transform-origin: 12px 7px;
+	}
+}
+
+.info {
+	//padding: 20px 35px;
+	margin-bottom: 30px;
+	justify-content: space-between;
+	&amp;-name,
+	&amp;-seat {
+		text-transform: uppercase;
+		h2 {
+			text-transform: none;
+		}
+	}
+	&amp;-seat {
+		text-align: right;
+	}
+}
+.flight {
+	//padding: 15px 35px 30px;
+	justify-content: space-between;
+	text-transform: uppercase;
+	&amp;-info,
+	&amp;-depart-date,
+	&amp;-depart-time {
+		//flex: 1 0 33.33333%;
+		//background-color: yellow;
+		h2 {
+			text-transform: none;
+		}
+	}
+}
+
+
+// bottom
+// ******************************
+.ticket-bottom {
+	border-radius: 0 0 10px 10px;
+	background-color: white;
+}
+
+.bottom-info {
+	padding: 20px 35px;
+}
+
+.depart {
+	display: flex;
+	justify-content: space-between;
+	margin-bottom: 20px;
+	text-transform: uppercase;
+	h2 {
+		text-transform: none;
+	}
+	&amp;-barcode { // sloppy af temp barcode!
+		width: 100%;
+		height: 45px;
+		background: linear-gradient(
+			to right,
+			#000 0%, #000 20%,
+			#fff 20%, #fff 40%,
+			#000 40%, #000 50%,
+			#fff 50%, #fff 70%,
+			#000 70%, #000 90%,
+			#fff 90%, #fff 100%
+		);
+		background-size: 7.5% 100%;
+	}
+}
+
+//------------FLIGHT CARD END-------</css>
+        <data_table>sp_instance</data_table>
+        <demo_data>{
+	"data": {
+		"sometext": "world"
+	}
+}</demo_data>
+        <description/>
+        <docs/>
+        <field_list/>
+        <has_preview>true</has_preview>
+        <id>logcopmap</id>
+        <internal>false</internal>
+        <link/>
+        <name>LogCopMap</name>
+        <option_schema/>
+        <public>true</public>
+        <roles/>
+        <script><![CDATA[(function() {
+  /* populate the 'data' object */
+  /* e.g., data.table = $sp.getValue('table'); */
+	
+	data.logitems = [];
+	data.fcr = [];
+	data.sam = [];
+	//run query
+	var gr = new GlideRecord("x_snc_hqmc_hqmc_locations"); 
+  //gr.addQuery('type', "Airplane");
+  gr.query();   // Issue the query to the database to get relevant records
+  while (gr.next()) {   
+     //load it up
+		 var feature = {};
+		 var properties = { };
+		 properties.type = gr.getValue('type');
+		 properties.sys_id= gr.getUniqueValue(); //sysid
+		 properties.name = gr.getValue('location_name');
+		 properties.desc = gr.getValue('description');
+		 properties.where = gr.getValue('u_address');
+		 properties.icon = gr.getValue('location_name');
+		 feature.properties = properties;
+		
+		 var geometry = {};
+		 geometry.type = "Point";
+		 geometry.coordinates = [gr.getValue('u_latitude'),gr.getValue('u_longitude')]
+		 feature.geometry = geometry;
+		 
+		//add it to the logitems structure under features
+		 data.logitems.push(feature);
+  }
+	
+	  //frequency channel routes (fcr)
+    data.fcr.push({"chpath" : "Oceana-Sigonella",
+		 "fromcode": "NTU",
+		 "fromtime": "19:00",	
+		 "tocode": "NSY",
+		 "totime": "03:00",
+		 "flightnum": "FCR003",
+		 "missiontype":"Frequency Channel Route(FCR)",
+		 "frequency":"Daily",
+		 "duration": "9.5HRS",
+		 "manifest":"http://www.google.com",
+		 "from": [36.8227419 ,-76.0318966],
+		 "fromname": "Oceana (NTU)",
+		 "to": [37.400998396,14.919996],
+		 "toname": "Sigonella (NSY)"});
+	
+	  data.fcr.push({"chpath" : "Sigonella-Manama",
+		 "fromcode": "NSY",
+		 "fromtime": "06:15",	
+		 "tocode": "BAH",
+		 "totime": "10:05",
+		 "flightnum": "FCR004",
+		 "missiontype":"Frequency Channel Route(FCR)",
+		 "frequency":"Daily",
+		 "duration": "3H 10M",
+		 "manifest":"http://www.google.com",
+		 "from": [37.400998396,14.919996],
+		 "fromname": "Sigonella (NSY)",
+		 "to": [26.270833, 50.633611],
+		 "toname": "Bahrain (BAH)"});
+	
+	  data.fcr.push({"chpath" : "Dover AFB-Ramstein AFB",
+		"fromcode": "DOV",
+		 "fromtime": "07:15",	
+		 "tocode": "RMS",
+		 "totime": "16:45",
+		 "flightnum": "FCR005",
+		 "missiontype":"Frequency Channel Route(FCR)",
+		 "frequency":"Daily",
+		 "duration": "8H 10M",
+		 "manifest":"http://www.google.com",
+		 "from": [39.128333, -75.464722],
+		 "fromname": "Dover AFB (DOV)",
+		 "to": [49.443889, 7.602222],
+		 "toname": "Ramstein AFB (RMS)"});
+	
+	  data.fcr.push({"chpath" : "Ramstein AFB-Jebel Ali",
+		"fromcode": "RMS",
+		 "fromtime": "21:30",	
+		 "tocode": "BAH",
+		 "totime": "01:05",
+		 "flightnum": "FCR006",
+		 "missiontype":"FCR,",
+		 "frequency":"Daily",
+		 "duration": "4H 01M",
+		 "manifest":"http://www.google.com",
+		 "from": [49.443889, 7.602222],
+		 "fromname": "Ramstein AFB (RMS)",
+		 "to": [24.24, 54.548333],
+		 "toname": "Jebel Ali - UAE (DHF)"});
+	
+	
+	//SAAM (Sam)
+    data.sam.push({"chpath" : "Miramar MCAS-Oceana",
+		 "fromcode": "NKX",
+		 "fromtime": "06:00",	
+		 "tocode": "NTU",
+		 "totime": "14:05",
+		 "flightnum": "SAAM774",
+		 "missiontype":"SAAM",
+		 "frequency":"On Demand",
+		 "duration": "6H 20M",
+		 "manifest":"http://www.google.com",
+		 "from": [32.867778, -117.141667],
+		 "fromname": "Miramar MCAS (NKX)",
+		 "to": [36.8227419 ,-76.0318966],
+		 "toname": "Oceana (NTU)"});
+	
+	  data.sam.push({"chpath" : "Kadena-Bahrain",
+		 "fromcode": "DNA",
+		 "fromtime": "02:00",	
+		 "tocode": "NTU",
+		 "totime": "14:05",
+		 "flightnum": "SAAM339",
+		 "missiontype":"SAAM",
+		 "frequency":"On Demand",
+		 "duration": "12H 20M",
+		 "manifest":"http://www.google.com",
+		 "from": [26.351667, 127.769444],
+		 "fromname": "Kadena (DNA)",
+		 "to": [26.270833, 50.633611],
+		 "toname": "Bahrain (BAH)"});
+	
+		
+})();]]></script>
+        <servicenow>false</servicenow>
+        <sys_class_name>sp_widget</sys_class_name>
+        <sys_created_by>jnyika</sys_created_by>
+        <sys_created_on>2018-03-09 19:58:55</sys_created_on>
+        <sys_customer_update>false</sys_customer_update>
+        <sys_id>4e2e55f013309304218950f82244b082</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>LogCopMap</sys_name>
+        <sys_package display_value="LOGCOPMapWidget" source="x_snc_logcopmapwid">2abd11b013309304218950f82244b04f</sys_package>
+        <sys_policy/>
+        <sys_replace_on_upgrade>false</sys_replace_on_upgrade>
+        <sys_scope display_value="LOGCOPMapWidget">2abd11b013309304218950f82244b04f</sys_scope>
+        <sys_update_name>sp_widget_4e2e55f013309304218950f82244b082</sys_update_name>
+        <sys_updated_by>jnyika</sys_updated_by>
+        <sys_updated_on>2018-03-09 19:58:55</sys_updated_on>
+        <template><![CDATA[<div id="omap">
+</div>
+
+]]></template>
+    </sp_widget>
+</record_update>
